@@ -26,22 +26,24 @@ import commands
 import tempfile
 from nalulib import *
 
-if(len(sys.argv) < 5):
+if(len(sys.argv) < 6):
 		print """
 
 		Perform frame filling (a naive form of concealing) on a received YUV video.
 
 		Usage: %s <filtered received stream's trace> <bytes per frame>
-		<distorted YUV> <concealed YUV (output)> 
+		<total frames> <distorted YUV> <concealed YUV (output)> 
 
 		Where:
 
 		<filtered received stream's trace>: the trace file obtained from the
 		NAL unit dependency filtering process. For example:
-		$ naludepfilter-mediumgrain.py originaltrace.txt receivedtrace.txt > filteredtrace.txt
+		$ nalufilter originaltrace.txt receivedtrace.txt > filteredtrace.txt
 
 		<bytes per frame>: length in bytes of each YUV frame, obtained from
 		width*height*1.5. i.e. 152064 for CIF, 608256 for 4CIF, 4866048 for HD.
+
+		<total frames>: total number of frames in the original video.
 
 		<distorted YUV>: the received YUV, reconstructed from the filtered
 		trace file using the JSVM tools. For example: 
@@ -52,18 +54,15 @@ if(len(sys.argv) < 5):
 		the frame filling process. For each missing frame, the previously
 		available frame is inserted.
 				
-		Example: $ %s filteredtrace.txt 152064 foreman-d.yuv foreman-c.yuv
+		Example: $ %s filteredtrace.txt 152064 1490 foreman-d.yuv foreman-c.yuv
 		""" % (os.path.basename(sys.argv[0]), os.path.basename(sys.argv[0]))
 		sys.exit(1)
 
-GOPSIZE = 16
 filteredtracefilename = sys.argv[1]
 bytesperframe = int(sys.argv[2])
-distortedyuvfilename = sys.argv[3]
-concealedyuvfilename = sys.argv[4]
-
-# make and get a temporary directory
-tmpdir = tempfile.mkdtemp("","wicloconc",".")
+totalframes = int(sys.argv[3])
+distortedyuvfilename = sys.argv[4]
+concealedyuvfilename = sys.argv[5]
 
 # collect the frames that are present in the filtered trace file
 frameset = set()
@@ -77,11 +76,18 @@ for line in filteredfile:
 				pass
 filteredfile.close()
 
+if len(frameset) == totalframes:
+		print "%d frames in the filtered trace file. No concealing needed. Hardlinking the distorted YUV." % len(frameset)
+		command1 = "ln %s %s" % (distortedyuvfilename, concealedyuvfilename)
+		dothem([command1])
+		sys.exit(0)
+
 framelist = list(frameset)
 framelist.sort()
 #print "%d frames in the filtered received trace: " % len(framelist), framelist
 
-numberofframes = 1 + max(framelist)
+#numberofframes = 1 + max(framelist)
+numberofframes = totalframes 
 
 def findsubstituteframe(currentframe):
 		# search backwards
@@ -112,6 +118,9 @@ for i in range(numberofframes):
 
 print "Sequence: ", framesequence
 assert len(framesequence) == numberofframes
+
+# make and get a temporary directory
+tmpdir = tempfile.mkdtemp("","wicloconc",".")
 
 # mince the filtered video
 mince(distortedyuvfilename, bytesperframe, tmpdir, framelist)

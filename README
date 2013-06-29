@@ -1,0 +1,72 @@
+============================================================================
+SVEF:Scalable Video-streaming Evaluation Framework
+============================================================================
+
+SVEF is a mixed online/offline open-source framework devised to evaluate the
+performance of H.264 SVC video streaming. It is written in C and Python and
+released, Copyright Andrea Detti and Claudio Pisa, under the GNU General Public
+License. 
+
+============================================================================
+Requirements
+============================================================================
+
+Although, with small changes, SVEF should work on most platforms, it has been
+developed and tested on GNU/Linux operating systems with the following
+packages:
+
+    * JSVM reference software
+	* Python 2.5 standard distribution
+	* A C compiler (e.g., GCC - The GNU Compiler Collection)
+	* Bash shell
+
+Moreover, to run the scheduler, a Linux kernel with the Intermediate Queueing
+Device (IMQ) module enabled is required. In our tests, Linux kernel version
+2.6.24 with the IMQ patch was used.  
+
+============================================================================
+Usage Example
+============================================================================
+At server side:
+server_side $ H264AVCDecoderLibTestStatic Soccer_SVC_growing.264 Soccer_SVC_growing.yuv > originaldecoderoutput.txt
+server_side $ BitStreamExtractorStatic -pt originaltrace.txt Soccer_SVC_growing.264
+server_side $ f-nstamp originaldecoderoutput.txt originaltrace.txt > originaltrace-frameno.txt
+server_side $ streamer originaltrace-frameno.txt 30 192.168.0.123 4455 Soccer_SVC_growing.264 1 > sent.txt
+
+At client side:
+client_side $ receiver 4455 out.264 50200 > receivedtrace.txt
+client_side $ nalufilter originaltrace-frameno.txt receivedtrace.txt 5000 30 > filteredtrace.txt
+client_side $ BitStreamExtractorStatic Soccer_SVC_growing.264 Soccer_SVC_growing-filtered.264 -et filteredtrace.txt
+client_side $ H264AVCDecoderLibTestStatic Soccer_SVC_growing-filtered.264 Soccer_SVC_growing-filtered.yuv
+client_side $ framefiller filteredtrace.txt 608256 1489 Soccer_SVC_growing-filtered.yuv Soccer_SVC_growing-concealed.yuv
+client_side $ PSNRStatic 704 576 SOCCER_704x576_30_orig_02x5.yuv Soccer_SVC_growing-concealed.yuv
+
+============================================================================
+Documentation
+============================================================================
+
+Please refer to http://svef.netgroup.uniroma2.it
+
+============================================================================
+Scientific Referral
+============================================================================
+If you need to refer this software please use the following:
+
+A. Detti, G. Bianchi, W. Kellerer, et al. "SVEF: an Open-Source Experimental 
+Evaluation Framework" in Proc. of IEEE MediaWIN 2009, Sousse, Tunisia
+
+or, equivalently, the following BibTeX entry:
+
+@INPROCEEDINGS{svef,
+		author = {A. Detti and G. Bianchi and W. Kellerer and others},
+		title = {{SVEF}: an Open-Source Experimental Evaluation Framework},
+		booktitle = {In Proc. of {IEEE} {MediaWIN} 2009, Sousse, Tunisia},
+		year = {2009},
+}
+
+============================================================================
+Contacts
+============================================================================
+	* Andrea Detti <andrea dot detti at uniroma2 dot it>
+	* Claudio Pisa <claudio dot pisa at uniroma2 dot it>
+
