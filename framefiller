@@ -106,12 +106,14 @@ def findsubstituteframe(currentframe):
 		raise NALUException("frame not found: %s" % currentframe)
 
 # create a sequence of frames from the distorted YUV, as will appear in the concealed YUV
+missingframes = []
 framesequence = []
 addcounter = 0
 for i in range(numberofframes):
 		if i in framelist:
 				framesequence.append(i)
 		else:
+				missingframes.append(i)
 				concframe = findsubstituteframe(i)
 				framesequence.append(concframe)
 				addcounter += 1
@@ -120,7 +122,7 @@ print "Sequence: ", framesequence
 assert len(framesequence) == numberofframes
 
 # make and get a temporary directory
-tmpdir = tempfile.mkdtemp("","wicloconc",".")
+tmpdir = tempfile.mkdtemp("","/tmp/wicloconc",".")
 
 # mince the filtered video
 mince(distortedyuvfilename, bytesperframe, tmpdir, framelist)
@@ -135,6 +137,8 @@ for frame in framesequence:
 		framefilename = "%s/%d.yuv" % (tmpdir, frame)
 		command = "cat %s >> %s" % (framefilename, concealedyuvfilename)
 		dothem([command])
+
+print "Missing Frames: %s " % missingframes
 
 print """Statistics:
 		%d frames in original video

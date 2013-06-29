@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #
-#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 #
 #  This file is part of SVEF (SVC Streaming Evaluation Framework).
 #
@@ -21,6 +21,7 @@
 
 import sys
 from nalulib import *
+import os
 
 
 if(len(sys.argv) < 3):
@@ -30,14 +31,13 @@ if(len(sys.argv) < 3):
 		
 		Usage: %s <received trace file> <fps>
 
-		<received trace file>: JSVM BitstreamExtractor trace file with further
-		two columns containing the timestamp of the reception time and the
-		frame number for each NAL unit. This trace may be obtained from the
-		receiver module.
+		<received trace file>: JSVM BitstreamExtractor trace file with a
+		further column containing the frame number for each NAL unit. This
+		trace may be obtained from the receiver module.
 
 		<fps>: frames per second
 
-		""" % sys.argv[0]
+		""" % os.path.basename(sys.argv[0])
 		sys.exit(1)
 
 receivedtracefilename = sys.argv[1]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #
-#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 #
 #  This file is part of SVEF (SVC Streaming Evaluation Framework).
 #
@@ -21,6 +21,7 @@
 
 import sys
 from nalulib import *
+import os
 
 
 if(len(sys.argv) < 3):
@@ -39,7 +40,7 @@ if(len(sys.argv) < 3):
 		time for each NAL unit. This trace may be obtained from the /receiver/
 		module.
 
-		""" % sys.argv[0]
+		""" % os.path.basename(sys.argv[0])
 		sys.exit(1)
 
 senttracefilename = sys.argv[1] 
