@@ -57,8 +57,8 @@ the frame number corresponding to the NALU associated to that line.
 Usage: f-nstamp <original stream's H264AVCDecoder output> <BitsreamExtractor generated trace> > sendingtrace.txt
 ```
 Where:
-original stream's H264AVCDecoder output: the screen output obtained from the
-H264AVCDecoder ran using the sent H.264 file as argument. For example:
+ * original stream's H264AVCDecoder output: the screen output obtained from the
+ * H264AVCDecoder ran using the sent H.264 file as argument. For example:
 ```
 $ H264AVCDecoderLibTestStatic foreman.264 foreman_null.yuv > originaldecoderoutput.txt
 ```
@@ -93,31 +93,32 @@ header's format may be schematized as follows:
                 
 ```
 Where:
-lid, tid, qid (one byte each): are the layer id, temporal id and quality id of the current NAL unit.
-l (one bit): if set then this is the last NAL unit of the video.
-ty (two bits): the type of the NAL unit (currently only SliceData NAL units are sent).
-d (one bit): if set then the NAL unit is discardable.
-t (one bit): if set then the NAL unit is truncatable.
-2 (one bit): if set then the packet contains two NAL units. Short Control NAL units are sent in the same packet as the NAL units that follow them.
-res (two bits): reserved for future use.
-naluid (4 bytes): the offset of the NAL unit in the original video.
-total size (2 bytes): the total size of the packet, including header, in bytes.
-frame number (2 bytes): the frame to which the NAL unit belongs, departing from 0.
+ * lid, tid, qid (one byte each): are the layer id, temporal id and quality id of the current NAL unit.
+ * l (one bit): if set then this is the last NAL unit of the video.
+ * ty (two bits): the type of the NAL unit (currently only SliceData NAL units are sent).
+ * d (one bit): if set then the NAL unit is discardable.
+ * t (one bit): if set then the NAL unit is truncatable.
+ * 2 (one bit): if set then the packet contains two NAL units. Short Control NAL units are sent in the same packet as the NAL units that follow them.
+ * res (two bits): reserved for future use.
+ * naluid (4 bytes): the offset of the NAL unit in the original video.
+ * total size (2 bytes): the total size of the packet, including header, in bytes.
+ * frame number (2 bytes): the frame to which the NAL unit belongs, departing from 0.
+
 ```
 Usage: streamer <tracefile> <fps> <destination_address> <port> <video file> [<seconds to wait before writing to standard output>]
 ```
 Where:
-tracefile: a BitstreamExtractor trace with frame numbers attached. This tracefile may be yield by the f-nstamp tool. For example:
+ * tracefile: a BitstreamExtractor trace with frame numbers attached. This tracefile may be yield by the f-nstamp tool. For example:
 ```
 $ H264AVCDecoderLibTestStatic Soccer_SVC_growing.264 Soccer_SVC_growing.yuv > originaldecoderoutput.txt
 $ BitStreamExtractorStatic -pt originaltrace.txt Soccer_SVC_growing.264
 $ f-nstamp originaldecoderoutput.txt originaltrace.txt > originaltrace-frameno.txt
 ```
-fps: video frames per second.
-destination_address: destination IPv4 address.
-port: destination UDP port.
-video file: H.264 SVC video file.
-seconds to wait before writing to standard output: this optional argument is
+ * fps: video frames per second.
+ * destination_address: destination IPv4 address.
+ * port: destination UDP port.
+ * video file: H.264 SVC video file.
+ * seconds to wait before writing to standard output: this optional argument is
 useful if multiple streamings are ran together, as writing to standard output
 may consume resources and interfere with other streamings that are in progress.
 The default is to wait 45 sedconds after the streaming is finished.
@@ -135,9 +136,9 @@ BistreamExtractor compatible tracefile.
 Usage: receiver <listening port> <output H.264 file> <video duration in milliseconds>
 ```
 Where:
-listening port: the UDP port on which to listen for an incoming stream.
-output H.264 file: the file to which to output the incoming video.
-video duration in milliseconds: stop receiving and quit after this time has elapsed.
+ * listening port: the UDP port on which to listen for an incoming stream.
+ * output H.264 file: the file to which to output the incoming video.
+ * video duration in milliseconds: stop receiving and quit after this time has elapsed.
 
 Example:
 ```
@@ -153,7 +154,7 @@ Scalability version.
 Usage: nalufilter <sent stream trace file> <received trace file> <play out buffer in milliseconds> <frames per second> > <filtered trace file>
 ```
 Where:
-sent stream trace file: the trace file obtained from the f-nstamp tool, using
+ * sent stream trace file: the trace file obtained from the f-nstamp tool, using 
 as the argument the trace obtained with the "-pt" option of the JSVM
 BitstreamExtractor tool, using the sent H.264 as the argument. For example:
 ```
@@ -162,6 +163,7 @@ $ f-nstamp originaldecoderoutput.txt originaltrace.txt > originaltrace-frameno.t
 received trace file: the trace file obtained from the receiver module. For example:
 $ ./receiver 4455 out.264 20000 > receivedtrace.txt
 ```
+
 Example:
 ```
 $ nalufilter originaltrace-frameno.txt receivedtrace.txt 5000 30 > filteredtrace.txt
@@ -174,18 +176,18 @@ Perform frame filling (a naive form of concealing) on a received YUV video.
 Usage: framefiller <filtered received stream's trace> <bytes per frame> <total frames> <distorted YUV> <concealed YUV (output)>
 ```
 Where:
-filtered received stream's trace: the trace file obtained from the NAL unit dependency filtering process. For example:
+ * filtered received stream's trace: the trace file obtained from the NAL unit dependency filtering process. For example:
 ```
 $ nalufilter originaltrace-frameno.txt receivedtrace.txt > filteredtrace.txt
 ```
-bytes per frame: length in bytes of each YUV frame, obtained from width*height*1.5. i.e. 152064 for CIF, 608256 for 4CIF, 4866048 for HD.
-total frames: total number of frames in the original video.
-distorted YUV: the received YUV, reconstructed from the filtered trace file using the JSVM tools. For example:
+ * bytes per frame: length in bytes of each YUV frame, obtained from width*height*1.5. i.e. 152064 for CIF, 608256 for 4CIF, 4866048 for HD.
+ * total frames: total number of frames in the original video.
+ * distorted YUV: the received YUV, reconstructed from the filtered trace file using the JSVM tools. For example:
 ```
 $ BitStreamExtractorStatic Soccer_SVC_growing.264 Soccer_SVC_growing-filtered.264 -et filteredtrace.txt
 $ H264AVCDecoderLibTestStatic Soccer_SVC_growing-filtered.264 Soccer_SVC_growing-filtered.yuv
 ```
-concealed YUV (output): the file containing the YUV resulting from the frame filling process. For each missing frame, the previously available frame is inserted.
+ * concealed YUV (output): the file containing the YUV resulting from the frame filling process. For each missing frame, the previously available frame is inserted.
 
 Example:
 ```
@@ -194,7 +196,7 @@ $ framefiller filteredtrace.txt 608256 1489 Soccer_SVC_growing-filtered.yuv Socc
 
 ## Scientific Referral
 
-If you need to refer this software please use the following:
+If you need to refer to this software please use the following:
 **A. Detti, G. Bianchi, W. Kellerer, et al. "SVEF: an Open-Source Experimental Evaluation Framework" in Proc. of IEEE MediaWIN 2009, Sousse, Tunisia**
 or, equivalently, the following BibTeX entry:
 ```
