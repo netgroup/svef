@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+
+#
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#
+#  This file is part of SVEF (SVC Streaming Evaluation Framework).
+#
+#  SVEF is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  SVEF is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with SVEF.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import sys
+import commands
+import tempfile
+import os
+from nalulib import *
+
+if(len(sys.argv) < 3):
+		print """
+
+		For each line of a BitstreamExtractor-generated trace file, add a
+		column with the frame number corresponding to the NALU associated to
+		that line. 
+
+		Usage: %s <original stream's H264AVCDecoder output> <BitsreamExtractor
+		generated trace>  >  sendingtrace.txt
+
+		Where:
+
+		<original stream's H264AVCDecoder output>: the screen output obtained
+		from the H264AVCDecoder ran using the sent H.264 file as argument. For
+		example:
+		$ H264AVCDecoderLibTestStatic foreman.264 foreman_null.yuv > originaldecoderoutput.txt
+		
+		<BitstreamExtractor generated trace>: the trace file obtained by using
+		the "-pt" option of the BitstreamExtractor executable using as argument
+		the sent H.264 file, or from the purgeLastGOP.py script. 
+		For example:
+		$ BitstreamExtractorStatic -pt originaltrace.txt foreman.264
+
+		Example: $ %s originaldecoderoutput.txt originaltrace.txt > originaltrace-frameno.txt
+		""" % (os.path.basename(sys.argv[0]), os.path.basename(sys.argv[0]))
+		sys.exit(1)
+
+GOPSIZE = 16
+originaldecoderoutputfilename = sys.argv[1]
+originaltraceptfilename = sys.argv[2]
+
+# load lines from the original trace file
+originaltracefile = open(originaltraceptfilename)
+slicedatatracelist = [] 
+tracelist = []
+for line in originaltracefile:
+		try:
+				nalu = NALU(line)
+				if nalu.packettype == "SliceData":
+						if not nalu.isControlNALU():
+								slicedatatracelist.append(nalu)
+				if nalu.length != -1:
+						tracelist.append(nalu)
+		except NALUException:
+				pass
+originaltracefile.close()
+
+
+# load lines from the decoder file
+originaldecoderoutputfile = open(originaldecoderoutputfilename)
+decoderlist = []
+offset =  -2 * GOPSIZE + 1
+offsetjustchanged = False
+positive = False
+
+for line in originaldecoderoutputfile:
+		try:
+				decnalu = DecoderNALU(line)
+				# find the frame for each line/NALU 
+				if decnalu.frame == 0 and not offsetjustchanged:
+						offset += GOPSIZE
+						offsetjustchanged = True
+				elif decnalu.frame > 0 and not offsetjustchanged and not positive: # in the last GOP the sign changes
+						offset += GOPSIZE
+						positive = True
+						offsetjustchanged = True # delete?
+
+				if offset < 0:
+						decnalu.realframe = abs(decnalu.frame)
+				else:
+						decnalu.realframe = offset + abs(decnalu.frame) 
+				decoderlist.append(decnalu)
+		except NALUException:
+				offsetjustchanged = False
+originaldecoderoutputfile.close()
+
+
+if len(slicedatatracelist) != len(decoderlist):
+		print "Length problem: %d vs. %d" % (len(slicedatatracelist), len(decoderlist))
+		sys.exit(1)
+
+# check that tracefile and decoder output match
+zippedlists = zip(slicedatatracelist, decoderlist)
+
+for tn, dn in zippedlists:
+		if tn.lid != dn.lid or tn.tid != dn.tl or tn.qid != dn.ql:
+				print "Problem: %d %d %d vs. %d %d %d" % (tn.lid, tn.tid, tn.qid, dn.lid, dn.tl, dn.ql)
+				sys.exit(2)
+		tn.frame_number = dn.realframe
+
+# find frame numbers for control NALUs
+for n, nalu in enumerate(tracelist):
+		if nalu.isControlNALU():
+				nalu.frame_number = tracelist[n+1].frame_number
+
+# print on standard output a copy of the originaltracefile with frame numbers
+for nalu in tracelist:
+		print nalu
+

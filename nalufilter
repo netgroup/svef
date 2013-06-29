@@ -1,0 +1,219 @@
+#!/usr/bin/env python
+
+#
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#
+#  This file is part of SVEF (SVC Streaming Evaluation Framework).
+#
+#  SVEF is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  SVEF is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with SVEF.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+# This script takes in input the original trace file and the received trace file (i.e. with
+# some lines missing) and attempts to delete the lines from the received trace file that
+# depend on lines that have been lost during the transmission.
+
+import sys
+import os
+from nalulib import *
+
+if(len(sys.argv) < 5):
+		print """
+		Filter the NAL units that have unsatisfied dependencies and emulate a
+		play-out buffer, dropping NAL units that were received too late.
+		SVC Medium Grain Scalability version.
+
+		Usage: %s <sent stream trace file> <received trace file> <play out buffer in 
+		milliseconds> <frames per second>  >   <filtered trace file>
+		
+		Where:
+
+		<sent stream trace file>: the trace file obtained from the "-pt" option
+		of the JSVM BitstreamExtractor tool using the sent H.264 as the
+		argument, or from the purgeLastGOP.py script. For example:
+		$ BitstreamExtractorStatic -pt originaltrace.txt foreman.264
+		$ purgeLastGOP.py originaldecoderoutput.txt originaltrace.txt > originaltrace-nolastgop.txt
+
+		<received trace file>: the trace file obtained from the /receiver/
+		module. For example:
+		$ ./receiver 4455 out.264 20000 > receivedtrace.txt
+
+		<play out buffer in milliseconds>: the length of the play-out buffer.
+
+		<frames per second>: fps for the processed video.
+
+		Example:
+		%s originaltrace-nolastgop.txt receivedtrace.txt 5000 30 > filteredtrace.txt
+
+		""" % (os.path.basename(sys.argv[0]), os.path.basename(sys.argv[0]))
+		sys.exit(1)
+
+originaltracefilename = sys.argv[1] 
+receivedtracefilename = sys.argv[2]
+playoutsize = int(sys.argv[3])
+fps = int(sys.argv[4]) * 1.0
+oneframetime = 1000.0 / fps
+
+
+# load lines from the original trace file
+originaltracefile = open(originaltracefilename)
+originalnalulist = [] 
+originalnaluheader = []
+originalnaludict = {}
+for line in originaltracefile:
+		try:
+				nalu = NALU(line)
+				if nalu.packettype == "SliceData":
+						originalnalulist.append(nalu)
+						originalnaludict.update({nalu.id: nalu})
+				else:
+						originalnaluheader.append(nalu)
+		except IndexError:
+				pass
+
+originaltracefile.close()
+
+# load lines from the received trace file
+receivedtracefile = open(receivedtracefilename)
+receivedparsednalulist = [] 
+receivednaluidset = set()
+for line in receivedtracefile:
+		try:
+				nalu = NALU(line)
+				nalu.ok = True # to mark lines as deleted or not
+				if nalu.packettype == "SliceData":
+						receivedparsednalulist.append(nalu)
+						assert not nalu.id in receivednaluidset
+						receivednaluidset.add(nalu.id)
+		except IndexError:
+				pass
+
+receivedtracefile.close()
+
+# sort the NAL units
+receivedparsednalulist.sort()
+
+# delete NAL units received too late
+t0 = receivedparsednalulist[0].timestamp
+
+for nalu in receivedparsednalulist:
+		expectedarrivaltime = int(t0 + nalu.frame_number * oneframetime)
+		nalu.delay = nalu.timestamp - expectedarrivaltime
+
+receivednalulist = [nalu for nalu in receivedparsednalulist if nalu.delay <= playoutsize]
+deletedpackets = len(receivedparsednalulist) - len(receivednalulist)
+
+#              Qid
+#   +--------------------------->
+#   |   +----+ +----+ +----+  
+#   |   |  --------------> |
+#   |   +--|-+ +----+ +----+  
+# T |      |
+# i |   +--|-+ +----+ +----+  
+# d |   |  +-------------> |
+#   |   +--|-+ +----+ +----+  
+#   |      |
+#   |   +--|-+ +----+ +----+  
+#   |   |  +-------------> |
+#   |   +----+ +----+ +----+  
+#   V
+
+# create NALU dependency trees, one per GOP
+# filter out control NALUs
+filterednalus = [nalu for nalu in originalnalulist if not nalu.isControlNALU()]
+j = 0
+while j < len(filterednalus):
+		gophead = j
+		j+=1
+		while j < len(filterednalus) and not filterednalus[j].isGOPHead():
+				j += 1
+		currentgop = filterednalus[gophead: j]
+		assert len(currentgop) == 0 or currentgop[0].isGOPHead()
+
+		# scan departing from the end
+		currentgop.reverse()
+		i = 0
+		while i < len(currentgop):
+				nalu = currentgop[i]
+				assert len(nalu.parents) == 0
+				for parentmediumid in nalu.getMediumParentsIds():
+						found = False
+						k = i 
+						while not found and k < len(currentgop):
+								if currentgop[k].getMediumId() == parentmediumid:
+										nalu.parents.append(currentgop[k].id)
+										found = True
+										assert len(nalu.parents) <= 2 
+								k += 1
+						assert found
+				i += 1 
+
+# now scan the received NALUs until the end of the GOP
+for recnalu in receivednalulist:
+		if not recnalu.isControlNALU():
+				corrnalu = originalnaludict[recnalu.id]
+				assert len(corrnalu.parents) <= 2 
+				for parentid in corrnalu.parents:
+						if not parentid in receivednaluidset:
+								try:
+										receivednaluidset.remove(recnalu.id) #delete from receivednaluidset
+								except KeyError:
+										assert recnalu.ok == False
+								recnalu.ok = False	#mark for deletion
+
+
+#second pass to delete duplicate control NALUs
+updatedreceivednalulist = [nalu for nalu in receivednalulist if nalu.ok]
+i = 0
+while i < len(updatedreceivednalulist) - 2:
+		if updatedreceivednalulist[i].isControlNALU() and updatedreceivednalulist[i+1].isControlNALU():
+					updatedreceivednalulist[i].ok = False
+		i+=1
+						
+
+#third pass to check if control NALUs are followed by the right NALUs
+reupdatedreceivednalulist = [nalu for nalu in updatedreceivednalulist if nalu.ok]
+i = 0
+while i < len(reupdatedreceivednalulist) - 2:
+		if reupdatedreceivednalulist[i].isControlNALU():
+					if reupdatedreceivednalulist[i+1].lid != reupdatedreceivednalulist[i].lid:
+						reupdatedreceivednalulist[i].ok = False
+					elif reupdatedreceivednalulist[i+1].tid != reupdatedreceivednalulist[i].tid:
+						reupdatedreceivednalulist[i].ok = False
+		i+=1
+
+#fourth pass to see if the last nalu is a control nalu
+rereupdatedreceivednalulist = [nalu for nalu in reupdatedreceivednalulist if nalu.ok] 
+i=-1
+nalu = rereupdatedreceivednalulist[i]
+while nalu.isControlNALU():
+		nalu.ok = False
+		i -= 1
+		nalu = rereupdatedreceivednalulist[i]
+
+#count and list deleted packets
+deletednalulist = [nalu for nalu in receivednalulist if not nalu.ok]
+
+#update the received packet list and print it
+newupdatedreceivednalulist = [nalu for nalu in receivednalulist if nalu.ok]
+print "Start-Pos.  Length  LId  TId  QId   Packet-Type  Discardable  Truncatable"
+print "==========  ======  ===  ===  ===  ============  ===========  ==========="
+for nalu in [nalu for nalu in originalnaluheader if nalu.id > -1]:
+		print nalu
+for nalu in newupdatedreceivednalulist:
+		print nalu
+		
+
+print >> sys.stderr, "%d packets deleted: %d arrived too late, %d had unsatisfied dependencies" \
+				% (deletedpackets + len(deletednalulist), deletedpackets, len(deletednalulist))
+
