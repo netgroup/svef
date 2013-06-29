@@ -1,5 +1,5 @@
 /*
-*  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+*  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 *
 *  This file is part of SVEF (SVC Streaming Evaluation Framework).
 *
@@ -75,6 +75,7 @@ struct traceline  /* a formatted line of the tracefile */
 		traceline_onebyte_t truncatable;
 		unsigned frameno;
 		unsigned long timestamp;
+		traceline_onebyte_t fragmentid;
 		struct traceline *next;
 		struct traceline *prev;
 		struct rawtraceline *original;
@@ -92,6 +93,8 @@ struct rawtraceline /* a raw (string) line of the tracefile */
 		char *truncatable;
 		char *timestamp;
 		char *frameno;
+		char *fragmentid;
+		int linesize;
 		struct rawtraceline *next;
 		struct rawtraceline *prev;
 };

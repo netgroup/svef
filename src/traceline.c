@@ -1,5 +1,5 @@
 /*
-*  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+*  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 *
 *  This file is part of SVEF (SVC Streaming Evaluation Framework).
 *
@@ -27,6 +27,8 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 		int scannedpars = 1;
 		struct rawtraceline *thisrt;
 		struct rawtraceline *newrt;
+		int fieldsread=0;
+		char *therest;
 
 		*rawtracelinelist = (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
 		thisrt = *rawtracelinelist;
@@ -38,7 +40,7 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 		}
 		while(scannedpars != EOF)
 		{
-				scannedpars = fscanf(tracefile, " %as %as %as %as %as %as %as %as %as %as\n", 
+				scannedpars = fscanf(tracefile, "%as %as %as %as %as %as %as %as [0-9 ]\n", 
 							&thisrt->startpos,
 							&thisrt->length,
 							&thisrt->lid,
@@ -47,10 +49,30 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 							&thisrt->packettype,
 							&thisrt->discardable,
 							&thisrt->truncatable,
-							&thisrt->frameno,
-							&thisrt->timestamp
-							);
-				assert(scannedpars == 10 || scannedpars == EOF);
+							therest);
+				assert(scannedpars == 8 || scannedpars == 9 || scannedpars == EOF);
+				fieldsread = 8;
+
+				if(scannedpars == 9)
+				{
+						scannedpars = sscanf(therest, "%as [0-9 ]", &thisrt->frameno, therest);
+						fieldsread += 1;
+						if(scannedpars == 2)
+						{
+								scannedpars = sscanf(therest, "%as [0-9 ]", &thisrt->timestamp, therest);
+								fieldsread +=1;
+								if(scannedpars == 2)
+								{
+										scannedpars = sscanf(therest, "%as", &thisrt->fragid);
+										fieldsread +=1;
+								} 
+						}
+
+				}
+
+				//debug
+				printf("%d %s \n", scannedpars, thisrt->startpos);
+
 				if(scannedpars != EOF)
 				{
 					newrt =  (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
@@ -99,6 +121,7 @@ traceline_free_raw(struct rawtraceline **rt)
 				free(i->truncatable);
 				free(i->frameno);
 				free(i->timestamp);
+				free(i->fragmentid);
 				i = i->prev;
 		}
 		free(i->startpos);

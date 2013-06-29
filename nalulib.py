@@ -39,13 +39,18 @@ class NALU:
 		frame_number = -1
 		parents = None	#NALUs on which this NALU depends
 		children = None	#NALUs that depend on this NALU
+		tracefileline = ""
 		def __init__(self, tracefileline):
 				"Take a line from a tracefile, parse it and populate this object's fields"
+				self.tracefileline = tracefileline
 				self.parents = list()
 				self.children = list()
 				try:
 						stuff = tracefileline.split()
-						self.startpos = stuff[0]
+						try:
+									self.startpos = stuff[0]
+						except IndexError:
+								raise NALUException
 						try:
 									self.id = int(stuff[0], 16)
 						except ValueError:
@@ -100,7 +105,7 @@ class NALU:
 
 		def isControlNALU(self):
 				"This object is a control NALU (i.e. type 6 or 14)?"
-				return self.length <= 10 and self.length > 0
+				return self.length <= 20 and self.length > 0
 
 		def isGOPHead(self):
 				"This object is at the beginning of a GOP?"
@@ -149,6 +154,26 @@ class NALU:
 				"String representation with the frame number"
 				return self.__str__() 
 
+		def copy(self):
+				return NALU(self.tracefileline)
+
+		def meiosis(self, maxlen):
+				"return a list of NALUs, each with length less than maxlen, resulting from the division of this NALU"
+				res = []
+				numberofnalus = self.length / maxlen + 1
+				avglen = self.length / numberofnalus
+				for i in range(numberofnalus):
+						n = NALU(self.tracefileline)
+						n.length = avglen
+						n.id = n.id + avglen * i
+						n.startpos = "0x%08x" % n.id
+						res.append(n)
+				#the remainder
+				res[-1].length += self.length % numberofnalus
+				return res
+
+
+
 
 class DecoderNALU:
 		frame = -1
@@ -162,7 +187,7 @@ class DecoderNALU:
 		original = ""
 		def __init__(self, decoderline):
 				#    0      1 2  3  4  5  6  7  8   9     10  11 12 13 14 15
-				#  Frame   -8 ( LId 1, TL 1, QL 0, SVC-P, BId 0, AP 1, QP 30 )
+				#  Frame    8 ( LId 1, TL 1, QL 0, SVC-P, BId 0, AP 1, QP 30 )
 				try:
 						fields = decoderline.split()
 						self.frame = int(fields[1])
@@ -192,6 +217,11 @@ def mince(filename, bytesperframe, tmpdir, filenames=[]):
 		numberofframes = sr.st_size / bytesperframe
 		if filenames == []:
 				filenames = range(numberofframes)
+		print "%d vs. %d" % (numberofframes, len(filenames))
+		if numberofframes < len(filenames):
+				filenames=filenames[:numberofframes]
+		elif numberofframes > len(filenames):
+				numberofframes = len(filenames)
 		assert numberofframes == len(filenames)
 		thefile = open(filename, 'rb')
 		offset = 0

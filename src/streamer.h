@@ -1,5 +1,5 @@
 /*
-*  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+*  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 *
 *  This file is part of SVEF (SVC Streaming Evaluation Framework).
 *
@@ -21,6 +21,7 @@
 #define STREAMER_H
 
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -69,13 +70,13 @@ typedef uint32_t streamer_fourbytes_t;
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         |      lid      |      tid      |      qid      |l|ty |d|t|2|res|
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-		|                             naluid                            |
+        |                             naluid                            |
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-		|           total size          |          frame number         |
+        |           total size          |          frame number         |
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-		|                            payload                            |
-		|                           .........                           |
-		|                           .........                           |
+        |                            payload                            |
+        |                           .........                           |
+        |                           .........                           |
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  */   
 

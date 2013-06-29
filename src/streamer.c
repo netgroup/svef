@@ -1,5 +1,5 @@
 /*
-*  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+*  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 *
 *  This file is part of SVEF (SVC Streaming Evaluation Framework).
 *
@@ -26,7 +26,7 @@ isControlNALU(struct traceline *tl)
 		if(tl->packettype != TRACELINE_PKT_SLICEDATA)
 				return 0;
 
-		if(tl->length == 8 || tl->length == 9 || tl->length == 10)
+		if(tl->length >= 8 && tl->length <= 25)
 				return 1;
 		else
 				return 0;
@@ -74,6 +74,7 @@ timeval2ulong(struct timeval *tv)
 int
 buildpacket(struct traceline *tl, struct ourpacket *nalutosend, FILE *videofile)
 { /* constructs a packet from a trace line */
+		int ret, readbytes;
 		nalutosend->total_size = htons(tl->length + HEADER_SIZE);
 		nalutosend->lid = tl->lid;
 		nalutosend->tid = tl->tid;
@@ -115,8 +116,27 @@ buildpacket(struct traceline *tl, struct ourpacket *nalutosend, FILE *videofile)
 		if(videofile != NULL)
 		{
 				/* real payload */
-				fseek(videofile, tl->startpos, SEEK_SET);
-				fread(&nalutosend->payload[0], 1, tl->length ,videofile); 
+				ret = fseek(videofile, tl->startpos, SEEK_SET);
+				assert(ret == 0);
+				readbytes = 0;
+				while (tl->length - readbytes > 0)
+				{
+						ret = (int) fread(&nalutosend->payload[readbytes], 1, tl->length, videofile);
+
+						if(feof(videofile))
+						{
+								fprintf(stdout, "EOF reached.\n");
+								exit(-4);
+						}
+						if(ferror(videofile))
+						{
+								fprintf(stdout, "An error occurred.\n");
+								exit(-5);
+						}
+
+						assert(ret>0);
+						readbytes += ret;
+				}
 		}
 
 	    //traceline_print_one(stderr, tl);
@@ -248,23 +268,26 @@ main(int argc, char **argv)
 					memcpy(&tosend, &nalutosend, payload_size);
 			}
 
-			gettimeofday(&tvsent, NULL);
+			sb = -1;
+			while (sb==-1) {
+				gettimeofday(&tvsent, NULL);
 
-			sb = sendto(
-							sock, 
-							&tosend, 
-							(size_t) payload_size, 
-							MSG_DONTWAIT, 
-							(struct sockaddr *) &dest, 
-							sizeof(dest)
-					);
+				sb = sendto(
+								sock, 
+								&tosend, 
+								(size_t) payload_size, 
+								MSG_DONTWAIT, 
+								(struct sockaddr *) &dest, 
+								sizeof(dest)
+						);
 
-			if(sb==-1)
-			{
-					fprintf(stderr, "Error! %s\n", strerror(errno));
-					fprintf(stderr, "payload_size = %d\n", payload_size);
-					fprintf(stderr, "nalutosend total size: %d, naluid: %x\n", ntohs(nalutosend.total_size), ntohl(nalutosend.naluid));
-					exit(-2);
+				if(sb==-1 && errno!=EAGAIN)
+				{
+						fprintf(stderr, "Error! %s\n", strerror(errno));
+						fprintf(stderr, "payload_size = %d\n", payload_size);
+						fprintf(stderr, "nalutosend total size: %d, naluid: %x\n", ntohs(nalutosend.total_size), ntohl(nalutosend.naluid));
+						exit(-2);
+				}
 			}
 			
 			toprint1->timestamp = timeval2ulong(&tvsent);

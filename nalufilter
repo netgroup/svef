@@ -78,7 +78,7 @@ for line in originaltracefile:
 						originalnaludict.update({nalu.id: nalu})
 				else:
 						originalnaluheader.append(nalu)
-		except IndexError:
+		except NALUException, IndexError:
 				pass
 
 originaltracefile.close()
@@ -95,7 +95,7 @@ for line in receivedtracefile:
 						receivedparsednalulist.append(nalu)
 						assert not nalu.id in receivednaluidset
 						receivednaluidset.add(nalu.id)
-		except IndexError:
+		except NALUException, IndexError:
 				pass
 
 receivedtracefile.close()
