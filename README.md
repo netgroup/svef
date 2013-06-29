@@ -57,15 +57,15 @@ the frame number corresponding to the NALU associated to that line.
 Usage: f-nstamp <original stream's H264AVCDecoder output> <BitsreamExtractor generated trace> > sendingtrace.txt
 ```
 Where:
- * original stream's H264AVCDecoder output: the screen output obtained from the
- * H264AVCDecoder ran using the sent H.264 file as argument. For example:
+ * original stream's H264AVCDecoder output: the screen output obtained from the H264AVCDecoder ran using the sent H.264 file as argument. For example:
 ```
 $ H264AVCDecoderLibTestStatic foreman.264 foreman_null.yuv > originaldecoderoutput.txt
 ```
-BitstreamExtractor generated trace: the trace file obtained by using the "-pt" option of the BitstreamExtractor executable using as argument the sent H.264 file. For example:
+ * BitstreamExtractor generated trace: the trace file obtained by using the "-pt" option of the BitstreamExtractor executable using as argument the sent H.264 file. For example:
 ```
 $ BitstreamExtractorStatic -pt originaltrace.txt foreman.264
 ```
+
 Example:
 ```
 $ f-nstamp originaldecoderoutput.txt originaltrace.txt > originaltrace-frameno.txt
