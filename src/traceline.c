@@ -41,7 +41,7 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 		charsread = fgets(buffer, TRACELINE_BUFSIZE, tracefile);
 		while(charsread != NULL)
 		{
-				scannedpars = sscanf(buffer, " %as %as %as %as %as %as %as %as %as %as \n" ,
+				scannedpars = sscanf(buffer, " %ms %ms %ms %ms %ms %ms %ms %ms %ms %ms \n" ,
 							&thisrt->startpos,
 							&thisrt->length,
 							&thisrt->lid,
@@ -58,9 +58,9 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 				switch(scannedpars)
 				{
 						case 8:
-								sscanf(" 0 ", "%as", &thisrt->frameno);
+								sscanf(" 0 ", "%ms", &thisrt->frameno);
 						case 9:
-								sscanf(" 0 ", "%as", &thisrt->timestamp);
+								sscanf(" 0 ", "%ms", &thisrt->timestamp);
 						case 10:
 								newrt =  (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
 
