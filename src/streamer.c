@@ -20,6 +20,11 @@
 #include "streamer.h"
 #include <sys/time.h>
 
+int sock;
+struct rawtraceline *rt;
+struct traceline *tl;
+FILE *videofile = NULL;
+
 int 
 isControlNALU(struct traceline *tl)
 {
@@ -121,36 +126,48 @@ buildpacket(struct traceline *tl, struct ourpacket *nalutosend, FILE *videofile)
 				readbytes = 0;
 				while (tl->length - readbytes > 0)
 				{
-						ret = (int) fread(&nalutosend->payload[readbytes], 1, tl->length, videofile);
+						ret = (int) fread(&nalutosend->payload[readbytes], 1, tl->length - readbytes, videofile);
 
 						if(feof(videofile))
 						{
-								fprintf(stdout, "EOF reached.\n");
-								exit(-4);
+								fprintf(stderr, "EOF reached while building the packet payload.\n");
+								return -4;
 						}
 						if(ferror(videofile))
 						{
-								fprintf(stdout, "An error occurred.\n");
-								exit(-5);
+								fprintf(stderr, "An error occurred while building the packet payload.\n");
+								return -5;
 						}
 
 						assert(ret>0);
 						readbytes += ret;
 				}
+		} else {
+				/* Fill with zeroes */
+				bzero(nalutosend->payload, tl->length);
 		}
 
 	    //traceline_print_one(stderr, tl);
 		return 0;
 }
 
+void quitonsig(int sig)
+{
+		fprintf(stderr, "\nQuitting...\n");
+		fflush(stderr);
+		traceline_free(&tl);
+		traceline_free_raw(&rt);
+		if(videofile != NULL) fclose(videofile);
+		close(sock);
+		exit(10);
+}
+
 int 
 main(int argc, char **argv)
 {
-		int sock, sb;
+		int sb;
 		struct sockaddr_in dest;
 		struct hostent *h;
-		struct rawtraceline *rt;
-		struct traceline *tl;
 		struct traceline *i;
 		struct traceline *toprint1;
 		struct traceline *toprint2;
@@ -158,7 +175,6 @@ main(int argc, char **argv)
 		struct ourpacket nextnalutosend;
 		struct timeval tvstart, tvend, tvsent;
 		unsigned long sleeping_interval, d; /* in nanoseconds */
-		FILE *videofile = NULL;
 		int payload_size, nalu1size, nalu2size, waitingseconds;
 		float fps;
 		// float tick;
@@ -168,9 +184,9 @@ main(int argc, char **argv)
 		 * 
 		 *  ./streamer <tracefile> <fps> <destination_address> <port> 
 		 */
-		if(argc < 6) 
+		if(argc < 5) 
 		{
-				fprintf(stderr, "Usage: %s <tracefile> <fps> <destination_address> <port> <video file> [<seconds to wait before writing to standard output>]\n", argv[0]);
+				fprintf(stderr, "Usage: %s <tracefile> <fps> <destination_address> <port> [<video file>] [<seconds to wait before writing to standard output>]\n", argv[0]);
 				exit(1);
 		}
 
@@ -190,24 +206,50 @@ main(int argc, char **argv)
 				waitingseconds = STREAMER_SLEEP_AFTER_STREAM; 
 
 		sock = socket(AF_INET, SOCK_DGRAM, 0);
-		if(sock<0) exit(1);
+		if(sock<0) {
+				fprintf(stderr, "streamer.c %s\n", strerror(errno));
+				exit(1);
+		}
 
 		h = gethostbyname(argv[3]);
-		if(!h) exit(2);
+		if(!h) {
+				fprintf(stderr, "streamer.c %s\n", strerror(h_errno));
+				close(sock);
+				exit(2);
+		}
 
 		memset(&dest, 0, sizeof(dest));
 
 		dest.sin_family = AF_INET;
 		memcpy(&dest.sin_addr.s_addr, h->h_addr, h->h_length);
 		dest.sin_port = htons(atoi(argv[4]));
+		
+		/* Open the video file, if present */
+		if(argc >= 6)
+		{
+				videofile = fopen(argv[5], "r");
+				if(videofile == NULL)
+				{
+					fprintf(stderr, "streamer.c %s\n", strerror(errno));
+					close(sock);
+					exit(4);
+				}
+		} else 
+				videofile = NULL;
 
-		/* Parse the file */
+		/* Parse the trace file */
 		traceline_parse_file(argv[1], &rt); 
 		traceline_raws_to_normals(rt, &tl); 
 
 		i = tl;
-		if(i == NULL)
+		if(i == NULL) 
+		{
+				traceline_free(&tl);
+				traceline_free_raw(&rt);
+				if(videofile != NULL) fclose(videofile);
+				close(sock);
 				return 0;
+		}
 		
 		/* skip the first lines */
 		/*
@@ -215,14 +257,11 @@ main(int argc, char **argv)
 				i = i->next;
 		*/
 
-		if((videofile = fopen(argv[5], "r")) == NULL)
-		{
-			fprintf(stderr, "streamer.c %s\n", strerror(errno));
-			exit(4);
-		}
+		signal(SIGTERM, quitonsig);
+		signal(SIGINT, quitonsig);
 
 		gettimeofday(&tvstart, NULL);
-		/* Iterating on the list of tracelines, pack and send them via UDP */
+		/* Iterating on the list of tracelines, pack and send the NALUs via UDP */
 		while(i != NULL)
 		{
 			while(i->packettype != TRACELINE_PKT_SLICEDATA)
@@ -230,7 +269,15 @@ main(int argc, char **argv)
 			
 			toprint1 = NULL;
 			toprint2 = NULL;
-			buildpacket(i, &nalutosend, videofile);
+			if(buildpacket(i, &nalutosend, videofile) != 0) 
+			{
+				fprintf(stderr, "Error building the packet. Quitting.\n");
+				traceline_free(&tl);
+				traceline_free_raw(&rt);
+				if(videofile != NULL) fclose(videofile);
+				close(sock);
+				exit(-4);
+			}
 			toprint1 = i;
 
 			payload_size = ntohs(nalutosend.total_size);
@@ -246,7 +293,15 @@ main(int argc, char **argv)
 					nalu1size = payload_size;
 					nalutosend.flags |= STREAMER_NALU_TWONALUS;
 					i = i->next;
-					buildpacket(i, &nextnalutosend, videofile);
+					if(buildpacket(i, &nextnalutosend, videofile) != 0)
+					{
+						fprintf(stderr, "Error building the packet. Quitting.\n");
+						traceline_free(&tl);
+						traceline_free_raw(&rt);
+						if(videofile != NULL) fclose(videofile);
+						close(sock);
+						exit(-5);
+					};
 					toprint2 = i;
 					nalu2size = ntohs(nextnalutosend.total_size);
 					memcpy(&tosend[0], &nalutosend, nalu1size);
@@ -286,6 +341,10 @@ main(int argc, char **argv)
 						fprintf(stderr, "Error! %s\n", strerror(errno));
 						fprintf(stderr, "payload_size = %d\n", payload_size);
 						fprintf(stderr, "nalutosend total size: %d, naluid: %x\n", ntohs(nalutosend.total_size), ntohl(nalutosend.naluid));
+						traceline_free(&tl);
+						traceline_free_raw(&rt);
+						if(videofile != NULL) fclose(videofile);
+						close(sock);
 						exit(-2);
 				}
 			}
@@ -305,6 +364,7 @@ main(int argc, char **argv)
 		sleep(waitingseconds);
 		traceline_print(tl);
 		fprintf(stderr, "tracefile printed\n");
+
 		traceline_free(&tl);
 		traceline_free_raw(&rt);
 		if(videofile != NULL)

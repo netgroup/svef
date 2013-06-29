@@ -24,23 +24,24 @@ int
 traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist) 
 {
 		FILE *tracefile;
+		char buffer[TRACELINE_BUFSIZE], *charsread;
 		int scannedpars = 1;
 		struct rawtraceline *thisrt;
 		struct rawtraceline *newrt;
-		int fieldsread=0;
-		char *therest;
-
-		*rawtracelinelist = (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
-		thisrt = *rawtracelinelist;
 
 		if((tracefile = fopen(filename, "r")) == NULL)
 		{
 				fprintf(stderr, "traceline.c: %s\n", strerror(errno));
 				exit(10);
 		}
-		while(scannedpars != EOF)
+		
+		*rawtracelinelist = (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
+		thisrt = *rawtracelinelist;
+
+		charsread = fgets(buffer, TRACELINE_BUFSIZE, tracefile);
+		while(charsread != NULL)
 		{
-				scannedpars = fscanf(tracefile, "%as %as %as %as %as %as %as %as [0-9 ]\n", 
+				scannedpars = sscanf(buffer, " 0x%ms %m[0-9] %m[0-9] %m[0-9] %m[0-9] %ms %m[YesNo] %m[YesNo] %m[0-9] %m[0-9] ",
 							&thisrt->startpos,
 							&thisrt->length,
 							&thisrt->lid,
@@ -49,47 +50,55 @@ traceline_parse_file(char *filename, struct rawtraceline **rawtracelinelist)
 							&thisrt->packettype,
 							&thisrt->discardable,
 							&thisrt->truncatable,
-							therest);
-				assert(scannedpars == 8 || scannedpars == 9 || scannedpars == EOF);
-				fieldsread = 8;
-
-				if(scannedpars == 9)
-				{
-						scannedpars = sscanf(therest, "%as [0-9 ]", &thisrt->frameno, therest);
-						fieldsread += 1;
-						if(scannedpars == 2)
-						{
-								scannedpars = sscanf(therest, "%as [0-9 ]", &thisrt->timestamp, therest);
-								fieldsread +=1;
-								if(scannedpars == 2)
-								{
-										scannedpars = sscanf(therest, "%as", &thisrt->fragid);
-										fieldsread +=1;
-								} 
-						}
-
-				}
-
+							&thisrt->frameno,
+							&thisrt->timestamp
+							);
 				//debug
-				printf("%d %s \n", scannedpars, thisrt->startpos);
-
-				if(scannedpars != EOF)
+				//printf("%d %s %s\n", scannedpars, thisrt->startpos, thisrt->frameno);
+				switch(scannedpars)
 				{
-					newrt =  (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
+						case 8:
+								sscanf(" 0 ", "%ms", &thisrt->frameno);
+						case 9:
+								sscanf(" 0 ", "%ms", &thisrt->timestamp);
+						case 10:
+								newrt =  (struct rawtraceline *) malloc(sizeof(struct rawtraceline));
 
-					/* double link */
-					thisrt->next = newrt;
-					newrt->prev = thisrt;
+								/* double link */
+								thisrt->next = newrt;
+								newrt->prev = thisrt;
 
-					thisrt = thisrt->next;
+								thisrt = thisrt->next;
+								break;
+						case 0: /* Go on. */
+						case -1:
+								break;
+						case 7:
+								free(&thisrt->discardable);
+						case 6:
+								free(&thisrt->packettype);
+						case 5:
+								free(&thisrt->qid);
+						case 4:
+								free(&thisrt->tid); 
+						case 3:
+								free(&thisrt->lid);
+						case 2:
+								free(&thisrt->length);
+						case 1:
+								free(&thisrt->startpos);
+						default:
+								fprintf(stderr, "Problem scanning tracefile.\n");
+								thisrt->prev->next = NULL;
+								free(thisrt);
+								traceline_free_raw(rawtracelinelist);
+								exit(11);
 				}
-				else
-				{
-					thisrt->prev->next = NULL;
-					free(thisrt);
-				}
+				charsread = fgets(buffer, TRACELINE_BUFSIZE, tracefile);
 		}
 
+		thisrt->prev->next = NULL;
+		free(thisrt);
 		fclose(tracefile);
 		return 1;
 }
@@ -106,7 +115,7 @@ traceline_free_raw(struct rawtraceline **rt)
 		while(i->next != NULL)
 				i = i->next;
 
-		/* free the mallocated structs and strings allocated with scanf's %as directive */
+		/* free the mallocated structs and strings allocated with scanf's %ms directive */
 		while(i != *rt)
 		{
 				if(i->next != NULL)
@@ -121,7 +130,6 @@ traceline_free_raw(struct rawtraceline **rt)
 				free(i->truncatable);
 				free(i->frameno);
 				free(i->timestamp);
-				free(i->fragmentid);
 				i = i->prev;
 		}
 		free(i->startpos);

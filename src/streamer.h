@@ -85,7 +85,7 @@ struct ourpacket
 		streamer_onebyte_t lid;
 		streamer_onebyte_t tid;
 		streamer_onebyte_t qid;
-		streamer_onebyte_t flags; /* 5 bits are used: last (1 bit), NALU type (2 bits), discardable (1 bit), truncatable (1 bit), two nalus (1 bit) */ 
+		streamer_onebyte_t flags; /* 6 bits are used: last (1 bit), NALU type (2 bits), discardable (1 bit), truncatable (1 bit), two nalus (1 bit) */ 
 		streamer_fourbytes_t naluid;
 		streamer_twobytes_t total_size; /* in bytes */
 		streamer_twobytes_t frame_number; /* departing from 0 */

@@ -1,5 +1,5 @@
 /*
-*  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+*  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 *
 *  This file is part of SVEF (SVC Streaming Evaluation Framework).
 *
@@ -21,10 +21,12 @@
 #include "traceline.h"
 
 struct traceline *tl;
+int sock;
 
 int
 decodepacket(struct traceline *newtl, struct ourpacket *pkt, FILE *outvideofile)
 {
+
 		newtl->length = ntohs(pkt->total_size) - HEADER_SIZE;
 		newtl->lid = pkt->lid;
 		newtl->tid = pkt->tid;
@@ -67,7 +69,12 @@ decodepacket(struct traceline *newtl, struct ourpacket *pkt, FILE *outvideofile)
 		*/
 
 		// write on the H.264 file
-		fwrite(pkt->payload, 1, newtl->length, outvideofile);
+		
+		if(fwrite(pkt->payload, 1, newtl->length, outvideofile) < newtl->length)
+		{
+				fprintf(stderr, "receiver.c: %s\n", strerror(errno));
+				return -1;
+		}
 		fflush(outvideofile);
 
 		return 0;
@@ -78,9 +85,19 @@ quitreceiver(int sig)
 {
 		fprintf(stderr, "Video time expired. Quitting...\n");
 		traceline_free(&tl);
+		close(sock);
 		exit(0);
 }
 
+void
+quitonsig(int sig)
+{
+		fprintf(stderr, "\nQuitting...\n");
+		fflush(stderr);
+		traceline_free(&tl);
+		close(sock);
+		exit(10);
+}
 
 unsigned long
 timeval2ulong(struct timeval *tv)
@@ -95,9 +112,8 @@ timeval2ulong(struct timeval *tv)
 int 
 main(int argc, char **argv)
 {
-		int sock, b;
-		struct sockaddr_in sin, sin_other;
-		socklen_t fromlen;
+		int b, ret;
+		struct sockaddr_in sin;
 		char recvbuffer[MAX_PAYLOAD];
 		struct ourpacket *recpacket; 
 		struct ourpacket *secondpacket;
@@ -120,6 +136,8 @@ main(int argc, char **argv)
 		}
 
 		signal(SIGALRM, quitreceiver);
+		signal(SIGTERM, quitonsig);
+		signal(SIGINT, quitonsig);
 
 		filename = argv[2];
 		videoduration = atoi(argv[3]);
@@ -127,10 +145,12 @@ main(int argc, char **argv)
 		fprintf(stderr, "Starting...\n");
 
 		sock = socket(AF_INET, SOCK_DGRAM, 0);
-		if(sock<0) exit(1);
+		if(sock<0) {
+				fprintf(stderr, "receiver.c socket: %s\n", strerror(errno));
+				exit(1);
+		}
 
 		memset(&sin, 0, sizeof(sin));
-		memset(&sin_other, 0, sizeof(sin_other));
 
 		sin.sin_family = AF_INET;
 		sin.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -140,19 +160,42 @@ main(int argc, char **argv)
 
 		fprintf(stderr, "Binding...\n");
 		b = bind(sock, (struct sockaddr *) &sin, sizeof(sin));
-		if(b<0) exit(3);
+		if(b<0) {
+				fprintf(stderr, "receiver.c bind: %s\n", strerror(errno));
+				close(sock);
+				exit(3);
+		}
 
 		outvideofile = fopen(filename, "w");
+		if(outvideofile == NULL)
+		{
+				fprintf(stderr, "receiver.c fopen: %s\n", strerror(errno));
+				close(sock);
+				exit(4);
+		}
 
 		tl = (struct traceline *) malloc(sizeof(struct traceline));
+		tl->next = NULL;
+		tl->prev = NULL;
 		newtl = tl;
 		while(!last)
 		{
-			recvfrom(sock, (void *) recvbuffer,  MAX_PAYLOAD, 0, (struct sockaddr *) &sin_other, &fromlen);
+			ret = recvfrom(sock, (void *) recvbuffer,  MAX_PAYLOAD, 0, NULL, NULL);
+			if(ret<=0)
+			{
+					if(ret<0) 
+							fprintf(stderr, "recvfrom: %s\n", strerror(errno));
+					else
+							fprintf(stderr, "recvfrom: The peer has performed an orderly shutdown. Quitting.\n");
+					traceline_free(&tl);
+					close(sock);
+					exit(5);
+			}
 			gettimeofday(&tv, NULL);
 			recpacket = (struct ourpacket *) recvbuffer;
 
-			/* after the reception of the first packet, receive for a number of seconds equal to the duration of the video and then quit */
+			/* after the reception of the first packet, receive for a number of 
+			 * seconds equal to the duration of the video and then quit */
 			if(alarmset == 0)
 			{
 					//alarm(videoduration);
@@ -163,22 +206,34 @@ main(int argc, char **argv)
 					alarmset=1;
 			}
 
-			decodepacket(newtl, recpacket, outvideofile);
+			if(decodepacket(newtl, recpacket, outvideofile) != 0)
+			{
+					traceline_free(&tl);
+					close(sock);
+					exit(6);
+			}
 			newtl->timestamp = timeval2ulong(&tv);
 			traceline_print_one(stdout, newtl);
 			
 			if(!((recpacket->flags & STREAMER_MASK_TWONALUS) ^ STREAMER_NALU_TWONALUS))
 			{ /* Received packet contains two NAL units */
 					newtl->next = (struct traceline *) malloc(sizeof(struct traceline));
+					newtl->next->next = NULL;
 					newtl->next->prev = newtl;
 					newtl=newtl->next;
 					secondpacket = (struct ourpacket *)(&recvbuffer[ntohs(recpacket->total_size)]);
-					decodepacket(newtl, secondpacket, outvideofile);
+					if(decodepacket(newtl, secondpacket, outvideofile) != 0)
+					{
+							traceline_free(&tl);
+							close(sock);
+							exit(7);
+					}
 					newtl->timestamp = timeval2ulong(&tv);
 					traceline_print_one(stdout, newtl);					
 					if(!((secondpacket->flags & STREAMER_MASK_LAST) ^ STREAMER_NOT_LAST_PACKET))
 					{
 							newtl->next = (struct traceline *) malloc(sizeof(struct traceline));
+							newtl->next->next = NULL;
 							newtl->next->prev = newtl;
 							newtl=newtl->next;
 					}
@@ -194,6 +249,7 @@ main(int argc, char **argv)
 					if(!((recpacket->flags & STREAMER_MASK_LAST) ^ STREAMER_NOT_LAST_PACKET))
 					{
 							newtl->next = (struct traceline *) malloc(sizeof(struct traceline));
+							newtl->next->next = NULL;
 							newtl->next->prev = newtl;
 							newtl=newtl->next;
 					}

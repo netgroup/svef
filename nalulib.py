@@ -1,5 +1,5 @@
 #
-#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 #
 #  This file is part of SVEF (SVC Streaming Evaluation Framework).
 #
@@ -239,15 +239,30 @@ def mince(filename, bytesperframe, tmpdir, filenames=[]):
 				offset += bytesperframe
 		thefile.close()
 
-def dothem(commandlist):
+def dothem(commandz, printoutput=True, printcommand=True, dummy=False, exitonerror=True, returnexitcode=False):
 		"execute a list of commands"
+		if not isinstance(commandz, list):
+				commandlist = [commandz]
+		else:
+				commandlist = commandz
 		for command in commandlist:
-				print command
-				ret, stdoe = commands.getstatusoutput(command)
-				print stdoe
+				if printcommand:
+						print command
+				if not dummy:
+						ret, stdoe = commands.getstatusoutput(command)
+				else:
+						ret = 0
+						stdoe = ""
+				if printoutput:
+						print stdoe
 				if ret != 0:
-						sys.exit(3)
-				return stdoe
+						print >> sys.stderr, "Execution Error!"
+						if exitonerror:
+								sys.exit(3)
+				if returnexitcode:
+						return stdoe, ret
+				else:
+						return stdoe
 
 def makehashdict(yuvdir):
 		command = "md5sum %s/*.yuv" % yuvdir 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #
-#  Copyright 2009 Claudio Pisa (claudio dot pisa at clauz dot net)
+#  Copyright 2009 Claudio Pisa (claudio dot pisa at uniroma2 dot it)
 #
 #  This file is part of SVEF (SVC Streaming Evaluation Framework).
 #
@@ -113,12 +113,12 @@ for nalu in receivedparsednalulist:
 receivednalulist = [nalu for nalu in receivedparsednalulist if nalu.delay <= playoutsize]
 deletedpackets = len(receivedparsednalulist) - len(receivednalulist)
 
-#              Qid
+#              Tid
 #   +--------------------------->
 #   |   +----+ +----+ +----+  
 #   |   |  --------------> |
 #   |   +--|-+ +----+ +----+  
-# T |      |
+# Q |      |
 # i |   +--|-+ +----+ +----+  
 # d |   |  +-------------> |
 #   |   +--|-+ +----+ +----+  
@@ -186,7 +186,7 @@ reupdatedreceivednalulist = [nalu for nalu in updatedreceivednalulist if nalu.ok
 i = 0
 while i < len(reupdatedreceivednalulist) - 2:
 		if reupdatedreceivednalulist[i].isControlNALU():
-					if reupdatedreceivednalulist[i+1].lid != reupdatedreceivednalulist[i].lid:
+					if reupdatedreceivednalulist[i+1].qid != reupdatedreceivednalulist[i].qid:
 						reupdatedreceivednalulist[i].ok = False
 					elif reupdatedreceivednalulist[i+1].tid != reupdatedreceivednalulist[i].tid:
 						reupdatedreceivednalulist[i].ok = False

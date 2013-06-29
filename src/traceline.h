@@ -59,6 +59,7 @@ Start-Pos.  Length  LId  TId  QId   Packet-Type  Discardable  Truncatable
 #define TRACELINE_PKT_UNDEFINED 0xff
 #define TRACELINE_YES 0x1
 #define TRACELINE_NO 0x0
+#define TRACELINE_BUFSIZE 1024
 
 typedef uint8_t traceline_onebyte_t;
 typedef uint32_t traceline_fourbytes_t;
@@ -75,7 +76,6 @@ struct traceline  /* a formatted line of the tracefile */
 		traceline_onebyte_t truncatable;
 		unsigned frameno;
 		unsigned long timestamp;
-		traceline_onebyte_t fragmentid;
 		struct traceline *next;
 		struct traceline *prev;
 		struct rawtraceline *original;
@@ -93,8 +93,6 @@ struct rawtraceline /* a raw (string) line of the tracefile */
 		char *truncatable;
 		char *timestamp;
 		char *frameno;
-		char *fragmentid;
-		int linesize;
 		struct rawtraceline *next;
 		struct rawtraceline *prev;
 };

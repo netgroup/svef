@@ -1,10 +1,10 @@
 
 SRCDIR=./src
-PROGRAMS=receiver streamer
+PROGRAMS=receiver streamer 
 REC_OBJS=$(SRCDIR)/traceline.o $(SRCDIR)/receiver.o
 STR_OBJS=$(SRCDIR)/traceline.o $(SRCDIR)/streamer.o
 #CFLAGS=-g
-CFLAGS=-O2 -Wall
+CFLAGS=-O2 -Wall 
 
 all: $(PROGRAMS) 
 
@@ -19,7 +19,7 @@ receiver.o: $(SRCDIR)/receiver.c $(SRCDIR)/streamer.h
 	
 streamer.o: $(SRCDIR)/streamer.c $(SRCDIR)/streamer.h
 	$(CC) $(CFLAGS) -c $(SRCDIR)/streamer.c
-	
+
 traceline.o: $(SRCDIR)/traceline.c $(SRCDIR)/traceline.h
 	$(CC) $(CFLAGS) -c $(SRCDIR)/traceline.c
 	
