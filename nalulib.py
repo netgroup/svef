@@ -88,7 +88,7 @@ class NALU:
 
 		def __str__(self):
 				"The string representation of this object"
-				return "%s%8s%5s%5s%5s%14s%12s%12s%8s%13s" % \
+				return "%s%8s%5s%5s%5s%14s%12s%12s%8s%20s" % \
 							(self.startpos, self.length, self.lid, \
 							self.tid, self.qid, self.packettype, self.discardable, \
 							self.truncatable, self.frame_number, self.timestamp)
